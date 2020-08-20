@@ -113,13 +113,13 @@ class AdjDecisionNet(torch.nn.Module):
         self.net.add_module("fc_1", torch.nn.Linear(insize, 128))
         self.net.add_module("nonlinear_1", torch.nn.ReLU())
         self.net.add_module("fc_2", torch.nn.Linear(128, agent_size))
-        self.net.add_module("activation", torch.nn.Softmax())
+        self.net.add_module("activation", torch.nn.Tanh())
 
     def forward(self, h1, h2, h3):
         x = torch.cat((h1, h2, h3), dim=-1)
         x = self.net(x)
-        x[x < 0.1] = 0
-        x[x >= 0.1] = 1
+        x[x >= 0] = 1
+        x[x < 0] = 0
         return x
 
 

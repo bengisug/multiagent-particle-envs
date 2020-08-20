@@ -1,6 +1,7 @@
 from __future__ import division
 import torch
 import torch.nn.functional as F
+from copy import deepcopy
 
 from multiagent.policies.attention.multi_head_attention import MultiHeadAttention
 
@@ -18,6 +19,7 @@ class GraphQNet1(torch.nn.Module):
         self.nagent = args.nagent
         self.device = args.device
         self.d_model = 128
+        self.counter = 0
 
     def forward(self, z, adj):
         adj = self.convert_adj(adj)
@@ -25,6 +27,7 @@ class GraphQNet1(torch.nn.Module):
         h1, dist1 = self.conv3(z, adj)
         # h2, dist2 = self.conv4(h1, adj)
         q_values = self.qnet(h1)
+        self.counter += 1
         return q_values, dist1, adj
         # return q_values, 0, adj
 
@@ -41,8 +44,10 @@ class GraphQNet1(torch.nn.Module):
         return torch.nn.functional.kl_div(qdist_comm, q_dist)
 
     def convert_adj(self, x):
-        x[x < 0] = 0
-        x[x >= 0] = 1
+        new_x = deepcopy(x)
+        new_x[new_x >= 0] = 1
+        new_x[new_x < 0] = 0
+        return new_x
 
 
 class GraphConv(torch.nn.Module):

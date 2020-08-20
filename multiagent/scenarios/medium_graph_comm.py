@@ -40,6 +40,11 @@ class Scenario(BaseScenario):
             agent.speaker = True
             agent.movable = False
 
+        for agent in world.agents:
+            agent.state.p_pos = np.random.uniform(-1, +1, world.dim_p)
+            agent.state.p_vel = np.zeros(world.dim_p)
+            agent.state.c = np.zeros(world.dim_c)
+
         self.reset_world(world)
         return world
 
@@ -112,10 +117,16 @@ class Scenario(BaseScenario):
         vote = np.argmax(votes)
         reward = 1 if act == vote else -1
 
-        agent.state.p_pos = np.random.uniform(-1, +1, world.dim_p)
-
         return reward
 
 
     def observation(self, agent, world):
-        return [agent.state.p_pos[0], agent.state.p_pos[1], random.randint(0, 2)]
+        distances = []
+        for a in world.agents:
+            d = (agent.state.p_pos[0] - a.state.p_pos[0]) ** 2 + (
+                        agent.state.p_pos[1] - a.state.p_pos[1]) ** 2
+            distances.append(d)
+
+        # return [agent.id, agent.state.p_pos[0], agent.state.p_pos[1], random.randint(0, 2)]
+        return [*distances, random.randint(0, 2)]
+        # return [agent.state.p_pos[0], agent.state.p_pos[1], random.randint(0, 2)]

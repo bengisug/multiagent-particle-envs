@@ -1,4 +1,4 @@
-import multiagent.scenarios.simple_graph_comm as mdp
+import multiagent.scenarios.medium_graph_comm as mdp
 from multiagent.environment import MultiAgentEnv
 from multiagent.policies.model.dgn_agent3 import DGNAgent
 from multiagent.policies.model.adj_agent import ADJAgent
@@ -129,15 +129,9 @@ if __name__ == '__main__':
     env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation, info_callback=None,
                         shared_viewer=False)
 
-    gatqnet = GraphQNet1(3, 5, args)
-
-    agent = DGNAgent(5, args.nagent, gatqnet, args.lr, args.reg_coef, args.start_epsilon,
-             args.end_epsilon, args.epsilon_decay, MAGTransition, args.buffer_size,
-             args.batch_size, args.tau, args.gamma, args.clip_grad, args.device, 0)
-
-    adj_actor = ADJActor(30, 128, args.nagent)
-    adj_critic1 = ADJCritic(30, 128, args.nagent)
-    adj_critic2 = ADJCritic(30, 128, args.nagent)
+    adj_actor = ADJActor(11, 128, args.nagent)
+    adj_critic1 = ADJCritic(11, 128, args.nagent)
+    adj_critic2 = ADJCritic(11, 128, args.nagent)
 
     adj_agent = ADJAgent(adj_actor, adj_critic1, adj_critic2, args.lradj, args.lradj, args.gamma, args.clip_grad,
                      SACTransition, args.buffer_size, args.batch_size, args.tau,
@@ -159,40 +153,24 @@ if __name__ == '__main__':
 
         for t in range(args.max_length):
 
-            _adj = env.world.adj
+            _adj = []
             for j in range(len(world.agents)):
-                for i, a in enumerate(world.agents):
-                    if state_n[i][1] == 1:
-                        _adj[j][i] = 1
-                    else:
-                        _adj[j][i] = 0
+                neighbor_count = 4
+                f = [[(world.agents[r].state.p_pos[0] - world.agents[j].state.p_pos[0]) ** 2 + (
+                        world.agents[r].state.p_pos[1] - world.agents[j].state.p_pos[1]) ** 2, r] for r in
+                     range(len(world.agents))]
+                f.sort(key=lambda x: x[0])
+                y = [f[r][1] for r in range(neighbor_count + 1)]
+                y = np.eye(len(world.agents))[y]
+                y = y.sum(0)
+                _adj.append(y)
             env.world.adj = torch.from_numpy(np.array(_adj))
 
             for i, a in enumerate(env.agents):
-                a.last_comm = state_n[i][2]
-            torch_state_n = agent._totorch(state_n)
+                a.last_comm = state_n[i][10]
+            torch_state_n = adj_agent._totorch(state_n)
 
-            # torch_state_z = adj_agent.encode_state(torch_state_n)
-
-            adj_state_n = torch_state_n.view(1, 30).repeat(10, 1)
-
-            adj, adj_logprob = adj_agent.act(adj_state_n)
-
-            # if t % 2 != 0:
-            #     adj, adj_logprob = adj_agent.act(torch_state_z)
-            # else:
-            #     adj = torch.ones_like(env.world.adj) - 1
-
-            # adj, adj_logprob = adj_agent.act(torch_state_z)
-
-            # if t == args.max_length - 1:
-            #     print("ADJ @@@@@@@@@@@")
-            #     print(env.world.adj == check_adj)
-            #     print("ADJ $$$$$$$$$$$")
-            #     print(((env.world.adj == check_adj).int().sum()))
-                # print("ADJ_LP @@@@@@@@@@@")
-                # print(adj)
-                # print("ADJ_LP $$$$$$$$$$$")
+            adj, adj_logprob = adj_agent.act(torch_state_n)
 
             # adj = torch.ones_like(env.world.adj) -1
             # adj = (env.world.adj) - 1
@@ -203,55 +181,26 @@ if __name__ == '__main__':
 
             adj_reward_n = (env.world.adj == check_adj).int().sum(axis=-1).true_divide(10)
 
-            action_n, causal_influence, adj_lp = agent.act(torch_state_n, adj, epsilon)
-                # print("OBS @@@@@@@@@@@")
-                # print(state_n)
-                # print("OBS $$$$$$$$$$$")
-                # print("ACTION @@@@@@@@@@@")
-                # print(action_n)
-                # print("ACTION $$$$$$$$$$$")
-
-            if args.plot and causal_influence is not np.nan:
-                summary_writer.add_scalar('data/causal-influence', causal_influence, t + eps * args.max_length)
-
-            next_state_n, reward_n, done_n, _ = env.step(action_n)
+            next_state_n, reward_n, done_n, _ = env.step(np.ones_like(state_n))
 
             if t == args.max_length - 1:
                 print(adj_reward_n)
+                # print((env.world.adj == check_adj).int())
                 print(env.world.adj)
                 print(check_adj)
                 print(((env.world.adj == check_adj).int().sum()))
-                # writer.plot_graph1(args, env.world.adj, "simple-graph", str(g_i) + '_0', state_n, action_n, reward_n)
-                # writer.plot_graph2(args, env.world.adj, "simple-graph", str(g_i) + '_1', state_n, action_n, reward_n)
                 g_i += 1
 
-            torch_next_state_n = agent._totorch(next_state_n)
-            # torch_next_state_z = adj_agent.encode_state(torch_next_state_n)
-            adj_next_state_n = torch_next_state_n.view(1, 30).repeat(10, 1)
+            torch_next_state_n = adj_agent._totorch(next_state_n)
 
-            episode_score += sum(reward_n)
+            episode_score += (env.world.adj == check_adj).int().sum().numpy()
 
-            # if t == args.max_length - 1:
-            #     print("WTF: {}".format(adj))
-            #     print("Check WTF: {}".format(check_adj))
 
-            transition = (state_n, action_n, next_state_n, reward_n, done_n, adj)
-            agent.push_transition(*transition)
-
-            # adj_reward_n = agent.intrinsic_reward(torch_state_z, adj)
-
-            if adj_lp is not np.nan:
-                adj_transition = (adj_state_n, adj, adj_next_state_n, adj_reward_n, done_n, adj_logprob)
-                adj_agent.push_transition(*adj_transition)
+            adj_transition = (torch_state_n, adj, torch_next_state_n, adj_reward_n, done_n, adj_logprob)
+            adj_agent.push_transition(*adj_transition)
 
             if eps > args.pretrain_episodes:
-                value_loss = agent.update()
-                # if t % 5 == 0:
-                value_loss2 = adj_agent.update(agent.intrinsic_reward)
-                if args.plot:
-                    summary_writer.add_scalar('data/value-loss', value_loss, t + eps * args.max_length)
-                if args.plot_grad:
-                    writer.plot_grad(summary_writer, agent.dgnet, "dg-net", t + eps * args.max_length)
+                value_loss2 = adj_agent.update()
 
             for a in world.agents:
                 a.state.p_pos = np.random.uniform(-1, +1, world.dim_p)
@@ -264,11 +213,11 @@ if __name__ == '__main__':
                 episode_score / args.max_length))
 
         if (eps + 1) % args.eval_period == 0:
-            agent.save_model(args.save_folder + "/" + args.file_name)
+            adj_agent.save_model(args.save_folder + "/" + args.file_name)
 
             if args.plot:
                 summary_writer.add_scalar('data/training-score', episode_score, eps)
 
-    agent.save_model(args.save_folder + "/" + args.file_name)
+    adj_agent.save_model(args.save_folder + "/" + args.file_name)
     summary_writer.export_scalars_to_json("./all_scalars.json")
     summary_writer.close()

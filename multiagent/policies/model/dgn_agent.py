@@ -38,8 +38,8 @@ class DGNAgent(OffPolicyAgent):
         self.eval()
         with torch.no_grad():
             z = self.dgnet.encode_state(observation)
-            adj = adjacency_list
-            # adj = torch.ones_like(adjacency_list)
+            # adj = adjacency_list
+            adj = torch.ones_like(adjacency_list)
             # adj = self.target_adjnet(z)
             q_dist, dist, _ = self.dgnet(z, adj)
             q_values = self.dgnet.qnet.expected_value(q_dist)

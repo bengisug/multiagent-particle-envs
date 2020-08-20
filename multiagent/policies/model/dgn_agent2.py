@@ -37,7 +37,7 @@ class DGNAgent(OffPolicyAgent):
             q_dist, dist, adj = self.dgnet(observation, adjacency_list)
             q_values = self.dgnet.qnet.expected_value(q_dist)
             actions = torch.max(q_values, dim=-1).indices.squeeze().unsqueeze(dim=-1)
-            causal_influence = self.dgnet.causal_influence(q_dist, observation)
+            causal_influence = self.dgnet.causal_influence(q_dist, observation, True)
         return actions.to("cpu").numpy().astype(np.int32), causal_influence, adj
 
     def infer_edge(self, state):

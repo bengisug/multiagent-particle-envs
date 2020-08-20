@@ -2,7 +2,7 @@ import yaml, os
 import torch
 from pathlib import Path
 import networkx as nx
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 
 def save_args(args):
@@ -30,10 +30,41 @@ def plot_grad(summary_writer, net, net_name, index):
         summary_writer.add_histogram(name, torch.abs(param.grad.detach()), index)
 
 
-# def plot_graph(args, adj, adj_name, index):
-#     G = nx.from_numpy_matrix(adj.cpu().detach().numpy(), parallel_edges=True, create_using=nx.MultiDiGraph())
-#     plt.figure()
-#     nx.draw_networkx(G, arrows=True)
-#     plt.savefig(args.save_folder + "/plots/" + adj_name + str(index))
-#     plt.close()
+def plot_graph1(args, adj, adj_name, index, state, action, reward):
+    G = nx.from_numpy_matrix(adj.cpu().detach().numpy(), parallel_edges=True, create_using=nx.MultiDiGraph())
+
+    plt.figure()
+    d = {}
+    l = {}
+    c = []
+    a = 0.1
+    for i in range(len(state)):
+        d[i] = (state[i][1], state[i][2])
+        # l[i] = (i, state[i][1])
+        l[i] = ('V: ' + str(state[i][3]), 'A: ' + str(action[i][0]), 'R: ' + str(reward[i]))
+        c.append((0.8, 0.4, a))
+        a += 0.1
+    nx.draw_networkx(G, pos=d, arrows=True, node_color=c, with_labels=True, labels=l, font_size=6)
+    # nx.draw_networkx_labels(G, pos=d, labels=l)
+    plt.savefig(args.save_folder + "/plots/" + adj_name + str(index))
+    plt.close()
+
+def plot_graph2(args, adj, adj_name, index, state, action, reward):
+    G = nx.from_numpy_matrix(adj.cpu().detach().numpy(), parallel_edges=True, create_using=nx.MultiDiGraph())
+
+    plt.figure()
+    d = {}
+    l = {}
+    c = []
+    a = 0
+    for i in range(len(state)):
+        d[i] = (state[i][1], state[i][2])
+        # l[i] = (i, state[i][1])
+        l[i] = i
+        c.append((0.8, 0.4, a))
+        a += 0.1
+    nx.draw_networkx(G, pos=d, arrows=True, node_color=c, with_labels=True, label=l, font_size=12)
+    # nx.draw_networkx_labels(G, pos=d, labels=l)
+    plt.savefig(args.save_folder + "/plots/" + adj_name + str(index))
+    plt.close()
 

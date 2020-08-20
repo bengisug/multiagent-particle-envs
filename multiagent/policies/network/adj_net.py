@@ -4,13 +4,14 @@ from multiagent.policies.attention.multi_head_attention import MultiHeadAttentio
 
 class ADJActor(torch.nn.Module):
 
-    def __init__(self, obs_size, action_size, nonlinear=torch.nn.ReLU, hidden_layer_size=1, node_size=256):
+    def __init__(self, obs_size, embed_size, action_size, nonlinear=torch.nn.ReLU, hidden_layer_size=1, node_size=256):
         super(ADJActor, self).__init__()
+        self.encoder = MLP(obs_size)
         self.action_size = action_size
         self.conv = GraphConv()
         self.adj = torch.ones([action_size, action_size])
         self.net = torch.nn.Sequential()
-        self.net.add_module("fc_1", torch.nn.Linear(obs_size, node_size))
+        self.net.add_module("fc_1", torch.nn.Linear(embed_size, node_size))
         self.net.add_module("nonlinear_1", nonlinear())
         for i in range(hidden_layer_size - 1):
             self.net.add_module("fc_" + str(i + 2), torch.nn.Linear(node_size, node_size))
@@ -21,8 +22,12 @@ class ADJActor(torch.nn.Module):
         self.log_std_max = 2
         self.epsilon = 1e-6
 
+    def encode_state(self, state):
+        return self.encoder(state)
+
     def forward(self, x):
-        x, _ = self.conv(x, None)
+        x = self.encode_state(x)
+        # x, dist = self.conv(x, None)
         return self.net(x)
 
     def policy_dist(self, x):
@@ -62,11 +67,12 @@ class ADJActor(torch.nn.Module):
 
 class ADJCritic(torch.nn.Module):
 
-    def __init__(self, obs_size, action_size, nonlinear=torch.nn.ReLU, hidden_layer_size=1, node_size=256):
+    def __init__(self, obs_size, embed_size, action_size, nonlinear=torch.nn.ReLU, hidden_layer_size=1, node_size=256):
         super(ADJCritic, self).__init__()
+        self.encoder = MLP(obs_size)
         self.conv = GraphConv()
         self.net = torch.nn.Sequential()
-        self.net.add_module("fc_1", torch.nn.Linear(obs_size, node_size))
+        self.net.add_module("fc_1", torch.nn.Linear(embed_size + action_size, node_size))
         self.net.add_module("nonlinear_1", nonlinear())
         for i in range(hidden_layer_size - 1):
             self.net.add_module("fc_" + str(i + 2), torch.nn.Linear(node_size, node_size))
@@ -74,8 +80,13 @@ class ADJCritic(torch.nn.Module):
         self.net.add_module("head", torch.nn.Linear(node_size, 1))
 
     def forward(self, state, action):
-        x, _ = self.conv(state, action)
+        state = self.encode_state(state)
+        # x, _ = self.conv(state, action)
+        x = torch.cat([state, action], dim=-1)
         return self.net(x)
+
+    def encode_state(self, state):
+        return self.encoder(state)
 
 
 class GraphConv(torch.nn.Module):
@@ -96,3 +107,20 @@ class GraphConv(torch.nn.Module):
         x = self.nonlinear(self.o_linear(torch.cat((x_in, x.squeeze()), dim=-1)))
 
         return x, dist
+
+class MLP(torch.nn.Module):
+
+    def __init__(self, insize, outsize=128, nonlinear=torch.nn.ReLU, activation=torch.nn.ReLU, hidden_layer_size=1,
+                 node_size=256):
+        super(MLP, self).__init__()
+        self.net = torch.nn.Sequential()
+        self.net.add_module("fc_1", torch.nn.Linear(insize, node_size))
+        self.net.add_module("nonlinear_1", nonlinear())
+        for i in range(hidden_layer_size - 1):
+            self.net.add_module("fc_" + str(i + 2), torch.nn.Linear(node_size, node_size))
+            self.net.add_module("nonlinear_" + str(i + 2), nonlinear())
+        self.net.add_module("head", torch.nn.Linear(node_size, outsize))
+        self.net.add_module("activation", activation())
+
+    def forward(self, x):
+        return self.net(x)

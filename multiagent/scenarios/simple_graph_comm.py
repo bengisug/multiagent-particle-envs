@@ -30,7 +30,7 @@ class Scenario(BaseScenario):
         mask = torch.eye(world.num_agents, world.num_agents).bool()
         world.adj.masked_fill_(mask, 1)
 
-        world.nact = 3
+        world.nact = 5
 
         world.agents = [GraphCommAgent() for _ in range(world.num_agents)]
         for i, agent in enumerate(world.agents):
@@ -104,4 +104,4 @@ class Scenario(BaseScenario):
 
 
     def observation(self, agent, world):
-        return [agent.id, random.randint(0, 2)]
+        return [agent.id, random.randint(0, 1), random.randint(0, 4)]

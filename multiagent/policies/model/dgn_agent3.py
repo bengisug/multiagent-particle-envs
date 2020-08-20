@@ -39,8 +39,8 @@ class DGNAgent(OffPolicyAgent):
             q_dist, dist, _ = self.dgnet(z, adj)
             q_values = self.dgnet.qnet.expected_value(q_dist)
             actions = torch.max(q_values, dim=-1).indices.squeeze().unsqueeze(dim=-1)
-            causal_influence = self.dgnet.causal_influence(q_dist, observation)
-        return actions.to("cpu").numpy().astype(np.int32), causal_influence, adj
+            # causal_influence = self.dgnet.causal_influence(q_dist, observation)
+        return actions.to("cpu").numpy().astype(np.int32), None, adj
 
     def infer_edge(self, state):
         adj = []
@@ -55,21 +55,22 @@ class DGNAgent(OffPolicyAgent):
             adj.append(y)
         return adj
 
-    def _adj_loss(self, batch):
-        z = self.dgnet.encode_state(batch.states)
-
-        adj = self.adjnet(z)
-
-        qvalue_dist, dist, _ = self.dgnet(z, adj)
-
-        causal_influence = self.dgnet.causal_influence(qvalue_dist, batch.states)
-
-        adj_loss = -causal_influence
-
-        return adj_loss
+    # def _adj_loss(self, batch):
+    #     z = self.dgnet.encode_state(batch.states)
+    #
+    #     adj = self.adjnet(z)
+    #
+    #     qvalue_dist, dist, _ = self.dgnet(z, adj)
+    #
+    #     causal_influence = self.dgnet.causal_influence(qvalue_dist, batch.states)
+    #
+    #     adj_loss = -causal_influence
+    #
+    #     return adj_loss
 
     def _td_loss(self, batch):
         batch_size = batch.states.size()[0]
+        # print("Batch adjs: {}".format(batch.adjs))
         with torch.no_grad():
             next_z = self.target_dgnet.encode_state(batch.next_states)
             target_qvalue_dist, _, _ = self.target_dgnet(next_z, batch.adjs)
@@ -139,9 +140,13 @@ class DGNAgent(OffPolicyAgent):
     def intrinsic_reward(self, z, adj):
         self.eval()
         with torch.no_grad():
+            z = self.dgnet.encode_state(z)
             q_dist, dist, _ = self.dgnet(z, adj)
             q_values = self.dgnet.qnet.expected_value(q_dist)
             intrinsic_reward = torch.max(q_values, dim=-1).values.squeeze()
+            # q_dist, dist, _ = self.dgnet(z, torch.zeros_like(adj))
+            # q_values = self.dgnet.qnet.expected_value(q_dist)
+            # intrinsic_reward -= torch.max(q_values, dim=-1).values.squeeze()
         return intrinsic_reward
 
     def encode_state(self, state):

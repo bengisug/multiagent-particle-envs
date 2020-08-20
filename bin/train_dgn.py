@@ -1,8 +1,8 @@
-import multiagent.scenarios.medium_graph_comm as mdp
+import multiagent.scenarios.simple_graph_comm as mdp
 from multiagent.environment import MultiAgentEnv
-from multiagent.policies.model.dgn_agent import DGNAgent
-from multiagent.policies.network.graph_qnet1 import GraphQNet1, AdjacencyNet
-# from multiagent.policies.network.graph_qnet2 import GraphQNet1
+from multiagent.policies.model.dgn_agent2 import DGNAgent
+# from multiagent.policies.network.graph_qnet1 import GraphQNet1, AdjacencyNet
+from multiagent.policies.network.graph_qnet2 import GraphQNet1
 from multiagent.policies.replay_buffer.transition import MAGTransition
 from bin import writer
 from tensorboardX import SummaryWriter
@@ -11,6 +11,7 @@ import importlib
 import numpy as np
 import os
 import torch
+from copy import deepcopy
 from datetime import datetime as dt
 
 
@@ -48,7 +49,7 @@ def get_parser():
                         help="Number of agents (default: %(default)s)")
     parser.add_argument("--episodes", type=int, default=100000,
                         help="Number of episodes (default: %(default)s)")
-    parser.add_argument("--pretrain-episodes", type=int, default=20,
+    parser.add_argument("--pretrain-episodes", type=int, default=2,
                         help="Number of episodes before training starts (default: %(default)s)")
     parser.add_argument("--max-length", type=int, default=300,
                         help="Maximum time step of the environment (default: %(default)s)")
@@ -124,16 +125,16 @@ if __name__ == '__main__':
     env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation, info_callback=None,
                         shared_viewer=False)
 
-    gatqnet = GraphQNet1(3, 3, args)
-    adjnet = AdjacencyNet(args.nagent)
+    gatqnet = GraphQNet1(2, 3, args)
+    # adjnet = AdjacencyNet(args.nagent)
 
-    agent = DGNAgent(3, args.nagent, gatqnet, adjnet, args.lr, args.reg_coef, args.start_epsilon,
-             args.end_epsilon, args.epsilon_decay, MAGTransition, args.buffer_size,
-             args.batch_size, args.tau, args.gamma, args.clip_grad, args.device, 0)
+    # agent = DGNAgent(3, args.nagent, gatqnet, adjnet, args.lr, args.reg_coef, args.start_epsilon,
+    #          args.end_epsilon, args.epsilon_decay, MAGTransition, args.buffer_size,
+    #          args.batch_size, args.tau, args.gamma, args.clip_grad, args.device, 0)
 
-    # agent = DGNAgent(3, args.nagent, gatqnet, args.lr, args.reg_coef, args.start_epsilon,
-    #                  args.end_epsilon, args.epsilon_decay, MAGTransition, args.buffer_size,
-    #                  args.batch_size, args.tau, args.gamma, args.clip_grad, args.device, 0)
+    agent = DGNAgent(3, args.nagent, gatqnet, args.lr, args.reg_coef, args.start_epsilon,
+                     args.end_epsilon, args.epsilon_decay, MAGTransition, args.buffer_size,
+                     args.batch_size, args.tau, args.gamma, args.clip_grad, args.device, 0)
 
     best_score = -np.inf
     epsilon = args.start_epsilon
@@ -156,28 +157,38 @@ if __name__ == '__main__':
             # mask = torch.eye(env.world.num_agents, env.world.num_agents).bool()
             # env.world.adj.masked_fill_(mask, 1)
 
-            adj = []
-            for j in range(len(world.agents)):
-                neighbor_count = 4
-                f = [[(world.agents[r].state.p_pos[0] - world.agents[j].state.p_pos[0]) ** 2 + (
-                        world.agents[r].state.p_pos[1] - world.agents[j].state.p_pos[1]) ** 2, r] for r in
-                     range(len(world.agents))]
-                f.sort(key=lambda x: x[0])
-                y = [f[r][1] for r in range(neighbor_count + 1)]
-                y = np.eye(len(world.agents))[y]
-                y = y.sum(0)
-                adj.append(y)
-            world.adj = torch.from_numpy(np.array(adj))
-
-            adj = env.world.adj
+            # adj = []
+            # for j in range(len(world.agents)):
+            #     neighbor_count = 4
+            #     f = [[(world.agents[r].state.p_pos[0] - world.agents[j].state.p_pos[0]) ** 2 + (
+            #             world.agents[r].state.p_pos[1] - world.agents[j].state.p_pos[1]) ** 2, r] for r in
+            #          range(len(world.agents))]
+            #     f.sort(key=lambda x: x[0])
+            #     y = [f[r][1] for r in range(neighbor_count + 1)]
+            #     y = np.eye(len(world.agents))[y]
+            #     y = y.sum(0)
+            #     adj.append(y)
+            # world.adj = torch.from_numpy(np.array(adj))
+            #
+            # adj = env.world.adj
 
             for i, a in enumerate(env.agents):
-                a.last_comm = state_n[i][2]
+                a.last_comm = state_n[i][1]
             torch_state_n = agent._totorch(state_n)
 
             adj = env.world.adj
 
             action_n, causal_influence, adj_lp = agent.act(torch_state_n, adj, epsilon)
+
+            if adj_lp is np.nan:
+                adj_lp = adj
+
+            if t == args.max_length - 1 and adj_lp is not np.nan:
+                print(adj_lp)
+                print((env.world.adj == adj_lp))
+                print(((env.world.adj == adj_lp).int().sum()))
+                print("Causal influence: {}".format(causal_influence))
+
             # if t == args.max_length - 1:
             #     print("ADJ @@@@@@@@@@@")
             #     print(adj)
@@ -203,7 +214,7 @@ if __name__ == '__main__':
 
             episode_score += sum(reward_n)
 
-            transition = (state_n, action_n, next_state_n, reward_n, done_n, adj)
+            transition = (state_n, action_n, next_state_n, reward_n, done_n, adj_lp)
             agent.push_transition(*transition)
 
             if eps > args.pretrain_episodes:
@@ -212,6 +223,9 @@ if __name__ == '__main__':
                     summary_writer.add_scalar('data/value-loss', value_loss, t + eps * args.max_length)
                 if args.plot_grad:
                     writer.plot_grad(summary_writer, agent.dgnet, "dg-net", t + eps * args.max_length)
+
+            for a in world.agents:
+                a.state.p_pos = np.random.uniform(-1, +1, world.dim_p)
 
             state_n = next_state_n
 

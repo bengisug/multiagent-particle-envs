@@ -74,7 +74,7 @@ class ADJAgent(OffPolicyAgent):
     def push_transition(self, *transition):
         self.transition_buffer.push(*transition)
 
-    def update(self, intrinsic_reward):
+    def update(self, intrinsic_reward=None):
         self.train()
         batch = self.transition_buffer.sample(self.batch_size)
         batch = self._batchtotorch(batch)
@@ -135,8 +135,9 @@ class ADJAgent(OffPolicyAgent):
         alpha_loss = (-self.log_alpha.exp() * (logprobs.detach() + self.target_entropy)).mean()
         return alpha_loss
 
-    def _td_loss(self, batch, critic, target_critic, intrinsic_reward):
-        rewards = intrinsic_reward(batch.state, batch.action)
+    def _td_loss(self, batch, critic, target_critic, intrinsic_reward=None):
+        # rewards = intrinsic_reward(batch.state, batch.action)
+        rewards = batch.reward
         action_values = critic(batch.state, batch.action)
         target_values = self._target_q_predict(batch.next_state, target_critic)
         target = rewards.unsqueeze(-1) + self.gamma * target_values * (1 - batch.terminal.unsqueeze(-1))

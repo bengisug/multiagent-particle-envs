@@ -31,7 +31,7 @@ class GraphQNet1(torch.nn.Module):
         adj = self.adj_net(z, h1, h2)
         self.last_adj = adj
 
-        h3, dist3 = self.conv3(z, adj)
+        h3, dist3 = self.conv3(z, torch.ones_like(adj))
         # h4, dist4 = self.conv4(h3, adj)
         q_values = self.qnet(h3)
         return q_values, dist3, adj
@@ -58,13 +58,16 @@ class GraphQNet1(torch.nn.Module):
             q_dist = self.qnet(z, h1, h2)
 
             entropy_nocomm = (-q_dist * q_dist.log()).sum()
-            entropy_comm = (-qdist_comm * qdist_comm.log()).sum()
+            entropy_comm = (-qdist_comm * qdist_comm.log()). sum()
             info_gain = entropy_nocomm - entropy_comm
             return info_gain / entropy_nocomm
 
-    def causal_influence(self, qdist_comm, state):
+    def causal_influence(self, qdist_comm, state, cadj=False):
         with torch.no_grad():
-            adj = torch.zeros_like(self.last_adj)
+            if cadj is False:
+                adj = torch.zeros_like(self.last_adj)
+            else:
+                adj = self.last_a
             z = self.encoder(state)
             h1, dist3 = self.conv3(z, adj)
             # h2, dist4 = self.conv4(h1, adj)
